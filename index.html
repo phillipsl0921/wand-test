@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Wand Test</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Almendra:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* One dark arcane screen: HUD on top, the arena canvas in the middle, the four spell cards at the bottom. */
+:root{
+  --night:#0d0b14; --dusk:#1a1626; --ink:#ece6d8; --muted:#9a93a8; --line:#3a3350;
+  --gold:#e8c26a; --danger:#ff5a5a;
+  --fire:#ff7a2f; --bolt:#9fd8ff; --frost:#7ff0e0; --ward:#e8d27a;
+  --display:"Almendra", Georgia, "Times New Roman", serif;
+  --body:system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono:"JetBrains Mono", ui-monospace, Consolas, monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  background:radial-gradient(120% 80% at 50% 30%, var(--dusk), var(--night) 70%);
+  background-color:var(--night);
+  color:var(--ink); font:15px/1.4 var(--body);
+  overflow:hidden; touch-action:manipulation; user-select:none; -webkit-user-select:none;
+}
+#app{
+  height:100%; display:flex; flex-direction:column; gap:8px;
+  padding-top:max(10px, env(safe-area-inset-top, 0px));
+  padding-bottom:max(10px, env(safe-area-inset-bottom, 0px));
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+}
+.hud{display:flex; align-items:center; gap:12px}
+.hp{flex:1; min-width:0}
+.hp-label{font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
+.bar{height:10px; border-radius:5px; background:#2a2438; overflow:hidden; margin-top:3px}
+.bar>i{display:block; height:100%; width:100%; background:linear-gradient(90deg,#c43c5a,#ff8a6a); transition:width .25s}
+.stat{font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:13px; color:var(--muted); text-align:right}
+.stat b{color:var(--ink); font-weight:600}
+#arena{flex:1; min-height:0; position:relative}
+#cv{position:absolute; inset:0; width:100%; height:100%; display:block}
+#status{
+  min-height:2.8em; text-align:center; font-family:var(--display); font-size:19px; color:var(--gold);
+  text-wrap:balance;
+}
+.cards{display:grid; grid-template-columns:repeat(4,1fr); gap:8px}
+.card{
+  background:#171323; border:1px solid var(--line); border-radius:10px; padding:8px 6px; color:var(--ink);
+  text-align:center; font:inherit; cursor:pointer; transition:transform .15s, border-color .15s, box-shadow .15s;
+  min-width:0;
+}
+.card:focus-visible{outline:2px solid var(--gold); outline-offset:2px}
+.card .nm{font-family:var(--display); font-size:16px; font-weight:700}
+.card .how{font-size:11px; color:var(--muted); line-height:1.25; margin-top:2px}
+.card svg{width:28px; height:28px; display:block; margin:0 auto 2px}
+.card.lit{transform:translateY(-4px); box-shadow:0 0 18px var(--glow); border-color:var(--glow)}
+.card[data-s=fire]{--glow:var(--fire)} .card[data-s=bolt]{--glow:var(--bolt)}
+.card[data-s=frost]{--glow:var(--frost)} .card[data-s=ward]{--glow:var(--ward)}
+.card[data-s=fire] .nm{color:var(--fire)} .card[data-s=bolt] .nm{color:var(--bolt)}
+.card[data-s=frost] .nm{color:var(--frost)} .card[data-s=ward] .nm{color:var(--ward)}
+.foot{display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; font-size:12px; color:var(--muted)}
+.foot label{display:flex; align-items:center; gap:6px}
+.foot input[type=range]{width:110px; accent-color:var(--gold)}
+#readout{font-family:var(--mono); font-size:11px; color:var(--muted); white-space:pre; overflow:hidden; min-height:0}
+#readout[hidden]{display:none}
+
+.overlay{
+  position:fixed; inset:0; z-index:5; display:flex; align-items:center; justify-content:center;
+  background:rgba(8,6,14,.92);
+  padding:max(20px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(20px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  overflow-y:auto;
+}
+.overlay[hidden]{display:none}
+.panel{max-width:440px; width:100%}
+.panel h1{font-family:var(--display); font-size:42px; margin:0 0 4px; color:var(--gold); text-wrap:balance}
+.panel p{margin:8px 0; color:var(--ink)}
+.panel .small{font-size:13px; color:var(--muted)}
+.panel ul{padding-left:18px; margin:10px 0}
+.panel li{margin:4px 0}
+.panel li b{font-family:var(--display); font-size:17px}
+.go{
+  display:block; width:100%; margin-top:16px; padding:14px; border-radius:12px; border:0; cursor:pointer;
+  background:linear-gradient(180deg,#f0cf7a,#c99a3e); color:#21170a; font:700 20px var(--display);
+}
+.go:focus-visible{outline:2px solid var(--ink); outline-offset:3px}
+@media (max-width:380px){ .card .how{display:none} }
+@media (prefers-reduced-motion:reduce){ .card,.bar>i{transition:none} }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="hud">
+    <div class="hp"><div class="hp-label">Your life</div><div class="bar"><i id="hpbar"></i></div></div>
+    <div class="stat">Foe <b id="wave">0</b><br>Score <b id="score">0</b></div>
+  </div>
+  <div id="arena"><canvas id="cv"></canvas></div>
+  <div id="status" aria-live="polite">Hold the phone upright, screen facing you.</div>
+  <div class="cards" id="cards">
+    <button class="card" data-s="fire" id="c-fire"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="color:var(--fire)"><path d="M12 21v-9M8 16l4-4 4 4M12 3v3"/><circle cx="12" cy="8" r="0.6" fill="currentColor"/></svg><div class="nm">Fireball</div><div class="how">Thrust forward</div></button>
+    <button class="card" data-s="bolt" id="c-bolt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="color:var(--bolt)"><path d="M6 5c6 0 10 4 11 12"/><path d="M13 15l4 3 2-4"/></svg><div class="nm">Lightning</div><div class="how">Chop down</div></button>
+    <button class="card" data-s="frost" id="c-frost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="color:var(--frost)"><path d="M19 12a7 7 0 1 1-3-5.7"/><path d="M16 3v4h4"/></svg><div class="nm">Frost</div><div class="how">Twist like a key</div></button>
+    <button class="card" data-s="ward" id="c-ward"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="color:var(--ward)"><path d="M4 12h16M7 9l-3 3 3 3M17 9l3 3-3 3"/></svg><div class="nm">Ward</div><div class="how">Sweep sideways</div></button>
+  </div>
+  <div class="foot">
+    <label for="sens">Sensitivity <input id="sens" type="range" min="0.5" max="2" step="0.1" value="1"> <span id="sensv">1.0</span></label>
+    <label for="dbg"><input id="dbg" type="checkbox"> Sensor data</label>
+  </div>
+  <div id="readout" hidden></div>
+</div>
+
+<div class="overlay" id="intro">
+  <div class="panel">
+    <h1>Wand Test</h1>
+    <p>Your phone is the wand. Foes walk up one at a time. Cast at them with your wrist and listen for what happens.</p>
+    <ul>
+      <li><b style="color:var(--fire)">Fireball</b> — push the phone straight forward and stop.</li>
+      <li><b style="color:var(--bolt)">Lightning</b> — chop down, tipping the top of the phone away from you.</li>
+      <li><b style="color:var(--frost)">Frost</b> — twist your wrist like turning a key.</li>
+      <li><b style="color:var(--ward)">Ward</b> — sweep the phone left or right. Cast it when you hear the rising warning tone to block the attack.</li>
+    </ul>
+    <p class="small">Hold the phone upright with the screen facing you. Each spell has its own sound and buzz, so you can cast without looking. A foe's weak spell hits twice as hard and breaks its wind-up. A hollow sliding sound means the gesture wasn't recognised.</p>
+    <p class="small">Grip it firmly and keep clear of people and furniture. Vibration works on Android; iPhones don't let web pages vibrate.</p>
+    <button class="go" id="start">Start</button>
+  </div>
+</div>
+
+<div class="overlay" id="over" hidden>
+  <div class="panel">
+    <h1>You fell</h1>
+    <p id="overtext"></p>
+    <button class="go" id="again">Play again</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const SPELLS = {
+  fire:  {name:'Fireball',  color:'#ff7a2f'},
+  bolt:  {name:'Lightning', color:'#9fd8ff'},
+  frost: {name:'Frost',     color:'#7ff0e0'},
+  ward:  {name:'Ward',      color:'#e8d27a'},
+};
+const TYPES = [
+  {name:'Bog Imp',      body:'#6f9a52', weak:'fire',  hp:60},
+  {name:'Cinder Wisp',  body:'#d0622b', weak:'frost', hp:70},
+  {name:'Iron Golem',   body:'#8a93a3', weak:'bolt',  hp:90},
+  {name:'Frost Wraith', body:'#8fd3e8', weak:'fire',  hp:80},
+  {name:'Sand Shade',   body:'#c9a96b', weak:'frost', hp:75},
+];
+
+/* ---------------- sound (synthesised, no files) ---------------- */
+let AC = null, master = null, noiseBuf = null;
+function audioInit(){
+  if (AC) { if (AC.state === 'suspended') AC.resume(); return; }
+  const C = window.AudioContext || window.webkitAudioContext;
+  if (!C) return;
+  AC = new C();
+  master = AC.createGain(); master.gain.value = 0.8; master.connect(AC.destination);
+  noiseBuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate);
+  const d = noiseBuf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+}
+function tone(type, f0, f1, dur, vol, delay = 0, attack = 0.01){
+  if (!AC) return;
+  const t = AC.currentTime + delay;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.setValueAtTime(f0, t);
+  if (f1) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + attack);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.05);
+}
+function noise(dur, vol, ftype, f0, f1, q = 1, delay = 0){
+  if (!AC) return;
+  const t = AC.currentTime + delay;
+  const s = AC.createBufferSource(), f = AC.createBiquadFilter(), g = AC.createGain();
+  s.buffer = noiseBuf; f.type = ftype; f.Q.value = q;
+  f.frequency.setValueAtTime(f0, t);
+  if (f1) f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  s.connect(f); f.connect(g); g.connect(master);
+  s.start(t, Math.random()); s.stop(t + dur + 0.05);
+}
+const sfx = {
+  tick(){ tone('sine', 880, 0, 0.05, 0.12); },
+  fire(){ noise(0.6, 0.6, 'bandpass', 300, 2600, 1.2); tone('sine', 95, 40, 0.45, 0.6); },
+  bolt(){ for (let i = 0; i < 6; i++) noise(0.045, 0.7, 'highpass', 2200, 0, 0.7, i * 0.035 + Math.random() * 0.02);
+          tone('square', 70, 40, 0.25, 0.25); tone('sawtooth', 1800, 200, 0.15, 0.12); },
+  frost(){ [1320, 1980, 2640, 3300].forEach((f, i) => tone('sine', f, f * 1.012, 0.9, 0.11, i * 0.06));
+           noise(0.5, 0.12, 'highpass', 6000, 9000, 0.5); },
+  ward(){ [220, 277, 330, 440].forEach(f => tone('triangle', f, 0, 1.1, 0.13, 0, 0.12)); },
+  fizzle(){ tone('sawtooth', 420, 70, 0.35, 0.12); },
+  hit(){ tone('sine', 170, 50, 0.25, 0.6, 0.0); },
+  weak(){ tone('triangle', 1200, 1700, 0.22, 0.2, 0.05); },
+  warn(){ tone('sawtooth', 180, 540, 1.35, 0.14, 0, 0.3); },
+  hurt(){ noise(0.35, 0.8, 'lowpass', 900, 200, 0.8); tone('square', 110, 60, 0.3, 0.3); },
+  block(){ tone('sine', 900, 880, 0.45, 0.35); tone('sine', 1350, 1340, 0.35, 0.22); },
+  appear(){ tone('sine', 140, 300, 0.5, 0.25); },
+  die(){ [523, 659, 784, 1046].forEach((f, i) => tone('triangle', f, 0, 0.2, 0.25, i * 0.08)); },
+  over(){ tone('sawtooth', 300, 55, 1.3, 0.25); },
+};
+/* ---------------- vibration ---------------- */
+const canVibrate = typeof navigator.vibrate === 'function';
+const VIB = {
+  tick:10, fire:[40, 30, 140], bolt:[15, 25, 15, 25, 15, 25, 70], frost:[12, 50, 12, 50, 12, 50, 12],
+  ward:[220], fizzle:[30, 60, 30], hit:25, warn:[60, 60, 60, 60, 60, 60, 200], hurt:380, block:[30, 30, 30],
+  die:[20, 30, 20, 30, 120], appear:[20, 40, 20],
+};
+function buzz(k){ if (canVibrate) try { navigator.vibrate(VIB[k]); } catch (e) {} }
+function cue(k){ (sfx[k] || (() => {}))(); buzz(k); }
+
+/* ---------------- gesture engine ---------------- */
+/* Axes are the phone's own, held upright with the screen facing you:
+   x across the screen, y up the screen, z out of the screen toward you.
+   rotationRate: beta = about x (chop), gamma = about y (sweep), alpha = about z (twist). */
+const ENG = { sens:1, active:false, t0:0, quiet:0, rot:[0, 0, 0], peak:[0, 0, 0], coolUntil:0, last:null };
+let grav = null, sensorSeen = false, lastLive = 0;
+function readEvent(e){
+  const r = e.rotationRate || {};
+  let ax, ay, az;
+  const a = e.acceleration;
+  if (a && a.x != null) { ax = a.x; ay = a.y; az = a.z; }
+  else {
+    const g = e.accelerationIncludingGravity;
+    if (!g || g.x == null) return null;
+    const raw = [g.x, g.y, g.z];
+    grav = grav ? grav.map((v, i) => v * 0.9 + raw[i] * 0.1) : raw.slice();
+    ax = raw[0] - grav[0]; ay = raw[1] - grav[1]; az = raw[2] - grav[2];
+  }
+  let dt = e.interval || 16; if (dt < 1) dt *= 1000;          // some browsers report seconds
+  dt = Math.min(100, Math.max(5, dt)) / 1000;
+  return { ra:r.alpha || 0, rb:r.beta || 0, rg:r.gamma || 0, ax, ay, az, dt };
+}
+function motionSample(s, now){
+  sensorSeen = true;
+  showLive(s, now);
+  if (now < ENG.coolUntil) return null;
+  const rotMag = Math.hypot(s.ra, s.rb, s.rg);                // deg/s
+  const accMag = Math.hypot(s.ax, s.ay, s.az);                // m/s²
+  const energy = (rotMag / 150 + accMag / 7) * ENG.sens;
+  if (!ENG.active) {
+    if (energy < 1) return null;
+    ENG.active = true; ENG.t0 = now; ENG.quiet = 0; ENG.rot = [0, 0, 0]; ENG.peak = [0, 0, 0];
+    onGestureStart();
+  }
+  ENG.rot[0] += Math.abs(s.rb) * s.dt;
+  ENG.rot[1] += Math.abs(s.rg) * s.dt;
+  ENG.rot[2] += Math.abs(s.ra) * s.dt;
+  ENG.peak[0] = Math.max(ENG.peak[0], Math.abs(s.ax));
+  ENG.peak[1] = Math.max(ENG.peak[1], Math.abs(s.ay));
+  ENG.peak[2] = Math.max(ENG.peak[2], Math.abs(s.az));
+  if (energy < 0.45) { if (!ENG.quiet) ENG.quiet = now; if (now - ENG.quiet >= 110) return endGesture(now); }
+  else ENG.quiet = 0;
+  if (now - ENG.t0 > 1000) return endGesture(now);
+  return null;
+}
+function endGesture(now){
+  ENG.active = false; ENG.coolUntil = now + 250;
+  const r = ENG.rot, p = ENG.peak, k = ENG.sens;
+  const rotTotal = r[0] + r[1] + r[2];
+  const minRot = 40 / k, minThrust = 7 / k;
+  let spell = null;
+  const thrust = p[2] >= minThrust && p[2] >= 1.3 * Math.max(p[0], p[1]) && rotTotal < 50;
+  if (thrust) spell = 'fire';
+  else if (rotTotal >= minRot) {
+    const i = r.indexOf(Math.max(...r));
+    if (r[i] / rotTotal >= 0.55) spell = ['bolt', 'ward', 'frost'][i];
+  }
+  const info = { spell, rot:r.map(v => Math.round(v)), peak:p.map(v => +v.toFixed(1)), ms:Math.round(now - ENG.t0) };
+  ENG.last = info;
+  onGestureEnd(info);
+  return info;
+}
+function showLive(s, now){
+  if ($('readout').hidden || now - lastLive < 100) return;
+  lastLive = now;
+  const f = v => (v >= 0 ? ' ' : '') + v.toFixed(0).padStart(4);
+  const L = ENG.last;
+  $('readout').textContent =
+    `rotation °/s  chop${f(s.rb)}  sweep${f(s.rg)}  twist${f(s.ra)}\n` +
+    `accel m/s²    x${f(s.ax * 10 / 10)}  y${f(s.ay)}  z${f(s.az)}\n` +
+    (L ? `last: ${L.spell || 'not recognised'}  turn° chop ${L.rot[0]} sweep ${L.rot[1]} twist ${L.rot[2]}  peak z ${L.peak[2]}  ${L.ms} ms` : 'last: —');
+}
+function onGestureStart(){ if (S.running) cue('tick'); }
+function onGestureEnd(info){
+  if (!S.running) return;
+  if (info.spell) cast(info.spell, performance.now());
+  else { cue('fizzle'); setStatus('The magic fizzles. Make the move sharper.'); }
+}
+
+/* ---------------- game ---------------- */
+const S = { running:false, hp:100, score:0, wave:0, enemy:null, wardUntil:0, nextEnemyAt:0,
+            flash:0, shake:0, fx:[], shots:[], hiddenAt:0 };
+function setStatus(t){ $('status').textContent = t; }
+function hud(){
+  $('hpbar').style.width = Math.max(0, S.hp) + '%';
+  $('score').textContent = S.score; $('wave').textContent = S.wave;
+}
+function attackPeriod(){ return Math.max(2800, 6500 - S.wave * 300); }
+function spawn(t){
+  const T = TYPES[Math.floor(Math.random() * TYPES.length)];
+  const hp = T.hp + S.wave * 8;
+  S.enemy = { ...T, hp, maxHp:hp, nextAttack:t + 4000, winding:false, windStart:0, hitAt:0, born:t };
+  S.wave++; hud(); cue('appear');
+  setStatus(`${T.name} approaches. Weak to ${SPELLS[T.weak].name}.`);
+}
+function cast(spell, t){
+  if (!S.running) return;
+  cue(spell); light(spell);
+  if (spell === 'ward') { S.wardUntil = t + 2000; setStatus('Ward raised.'); return; }
+  if (!S.enemy) { setStatus(`${SPELLS[spell].name} — nothing to hit yet.`); return; }
+  S.shots.push({ spell, t0:t, dur:240 });
+}
+function landShot(shot, t){
+  const e = S.enemy; if (!e) return;
+  const weak = e.weak === shot.spell;
+  e.hp -= weak ? 40 : 20; e.hitAt = t;
+  burst(shot.spell, 40);
+  cue('hit'); if (weak) sfx.weak();
+  if (weak && e.winding) { e.winding = false; e.nextAttack = t + attackPeriod(); setStatus(`Super effective! The ${e.name} is staggered.`); }
+  else setStatus(weak ? 'Super effective!' : `${SPELLS[shot.spell].name} hits.`);
+  if (e.hp <= 0) {
+    S.score += 100; S.enemy = null; S.nextEnemyAt = t + 1400; hud();
+    setTimeout(() => cue('die'), 180);
+    setStatus(`The ${e.name} is banished.`);
+  }
+}
+function update(t){
+  for (const s of S.shots.slice()) if (t >= s.t0 + s.dur) { S.shots.splice(S.shots.indexOf(s), 1); landShot(s, t); }
+  const e = S.enemy;
+  if (e) {
+    if (!e.winding && t >= e.nextAttack - 1400) { e.winding = true; e.windStart = t; cue('warn'); setStatus(`The ${e.name} winds up — cast Ward!`); }
+    if (e.winding && t >= e.nextAttack) {
+      e.winding = false; e.nextAttack = t + attackPeriod();
+      if (t < S.wardUntil) { cue('block'); S.score += 10; S.wardUntil = 0; burst('ward', 25); setStatus('Blocked!'); }
+      else {
+        S.hp -= 15; S.flash = 1; S.shake = 1; cue('hurt'); setStatus('You were hit.');
+        if (S.hp <= 0) return gameOver();
+      }
+      hud();
+    }
+  } else if (S.running && t >= S.nextEnemyAt) spawn(t);
+}
+function gameOver(){
+  S.running = false; hud(); cue('over');
+  $('overtext').textContent = `You banished ${Math.max(0, S.wave - 1)} foe${S.wave === 2 ? '' : 's'} for ${S.score} points.`;
+  $('over').hidden = false; $('again').focus();
+}
+function newGame(){
+  Object.assign(S, { running:true, hp:100, score:0, wave:0, enemy:null, wardUntil:0,
+                     nextEnemyAt:performance.now() + 900, fx:[], shots:[] });
+  hud(); setStatus('Get ready…');
+}
+function light(spell){
+  const c = $('c-' + spell); c.classList.add('lit');
+  clearTimeout(c._t); c._t = setTimeout(() => c.classList.remove('lit'), 350);
+}
+
+/* ---------------- drawing ---------------- */
+const cv = $('cv'), ctx = cv.getContext('2d');
+let W = 0, H = 0;
+function resize(){
+  const r = cv.getBoundingClientRect(), d = Math.min(window.devicePixelRatio || 1, 2);
+  W = r.width; H = r.height; cv.width = Math.round(W * d); cv.height = Math.round(H * d);
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+}
+window.addEventListener('resize', resize);
+function foePos(){ return { x:W / 2, y:H * 0.42, r:Math.min(W, H) * 0.2 }; }
+function burst(spell, n){
+  const p = foePos(), col = SPELLS[spell].color;
+  const at = spell === 'ward' ? { x:W / 2, y:H * 0.92 } : p;
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, v = 60 + Math.random() * 220;
+    S.fx.push({ x:at.x, y:at.y, vx:Math.cos(a) * v, vy:Math.sin(a) * v, life:0, max:0.4 + Math.random() * 0.5, col, size:2 + Math.random() * 3 });
+  }
+}
+function draw(t, dt){
+  ctx.clearRect(0, 0, W, H);
+  ctx.save();
+  if (S.shake > 0) { ctx.translate((Math.random() - .5) * 14 * S.shake, (Math.random() - .5) * 14 * S.shake); S.shake = Math.max(0, S.shake - dt * 3); }
+  const e = S.enemy, P = foePos();
+  if (e) {
+    const grow = Math.min(1, (t - e.born) / 500);
+    const wind = e.winding ? Math.min(1, (t - e.windStart) / 1400) : 0;
+    const r = P.r * grow * (1 + wind * 0.15 + Math.sin(t / 90) * 0.03 * wind);
+    const g = ctx.createRadialGradient(P.x, P.y, r * 0.2, P.x, P.y, r * 1.8);
+    g.addColorStop(0, wind ? `rgba(255,70,70,${0.25 + wind * 0.35})` : 'rgba(255,255,255,0.08)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(P.x, P.y, r * 1.8, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath();
+    for (let i = 0; i <= 24; i++) {
+      const a = i / 24 * Math.PI * 2, rr = r * (1 + 0.07 * Math.sin(i * 3 + t / 220));
+      const x = P.x + Math.cos(a) * rr, y = P.y + Math.sin(a) * rr * 1.08;
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    const flash = Math.max(0, 1 - (t - e.hitAt) / 180);
+    ctx.fillStyle = e.body; ctx.fill();
+    if (flash > 0) { ctx.fillStyle = `rgba(255,255,255,${flash * 0.8})`; ctx.fill(); }
+    ctx.lineWidth = 3; ctx.strokeStyle = wind ? '#ff5a5a' : 'rgba(0,0,0,0.35)'; ctx.stroke();
+    for (const s of [-1, 1]) {
+      ctx.fillStyle = wind ? '#ffdddd' : '#f6f1e4';
+      ctx.beginPath(); ctx.ellipse(P.x + s * r * 0.35, P.y - r * 0.15, r * 0.16, r * 0.2, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = wind ? '#c0102a' : '#1b1424';
+      ctx.beginPath(); ctx.arc(P.x + s * r * 0.33, P.y - r * 0.1, r * 0.08, 0, Math.PI * 2); ctx.fill();
+    }
+    const bw = Math.min(220, W * 0.6), bx = P.x - bw / 2, by = P.y - P.r * 1.45;
+    ctx.fillStyle = '#2a2438'; ctx.fillRect(bx, by, bw, 8);
+    ctx.fillStyle = e.body; ctx.fillRect(bx, by, bw * Math.max(0, e.hp) / e.maxHp, 8);
+    ctx.fillStyle = '#ece6d8'; ctx.font = '700 18px Almendra, Georgia, serif'; ctx.textAlign = 'center';
+    ctx.fillText(e.name, P.x, by - 22);
+    ctx.font = '12px system-ui, sans-serif'; ctx.fillStyle = SPELLS[e.weak].color;
+    ctx.fillText('weak to ' + SPELLS[e.weak].name, P.x, by - 6);
+  }
+  for (const s of S.shots) {
+    const k = Math.min(1, (t - s.t0) / s.dur), sx = W / 2, sy = H;
+    const x = sx + (P.x - sx) * k, y = sy + (P.y - sy) * k, col = SPELLS[s.spell].color;
+    ctx.globalCompositeOperation = 'lighter';
+    for (let j = 0; j < 6; j++) {
+      const kk = Math.max(0, k - j * 0.04);
+      ctx.fillStyle = col; ctx.globalAlpha = 0.5 - j * 0.07;
+      ctx.beginPath(); ctx.arc(sx + (P.x - sx) * kk, sy + (P.y - sy) * kk, 14 - j * 1.5, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    if (s.spell === 'bolt') { ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(sx, sy);
+      for (let j = 1; j <= 8; j++) ctx.lineTo(sx + (x - sx) * j / 8 + (Math.random() - .5) * 26, sy + (y - sy) * j / 8); ctx.stroke(); }
+  }
+  if (t < S.wardUntil) {
+    const left = (S.wardUntil - t) / 2000;
+    ctx.strokeStyle = `rgba(232,210,122,${0.25 + left * 0.6})`; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.arc(W / 2, H * 1.05, Math.min(W, H) * 0.42, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke();
+  }
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = S.fx.length - 1; i >= 0; i--) {
+    const f = S.fx[i]; f.life += dt; if (f.life > f.max) { S.fx.splice(i, 1); continue; }
+    f.x += f.vx * dt; f.y += f.vy * dt; f.vx *= 0.96; f.vy *= 0.96;
+    ctx.globalAlpha = 1 - f.life / f.max; ctx.fillStyle = f.col;
+    ctx.beginPath(); ctx.arc(f.x, f.y, f.size, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  ctx.restore();
+  if (S.flash > 0) { ctx.fillStyle = `rgba(255,40,40,${S.flash * 0.35})`; ctx.fillRect(0, 0, W, H); S.flash = Math.max(0, S.flash - dt * 2.5); }
+}
+let lastFrame = performance.now();
+function frame(t){
+  const dt = Math.min(0.05, (t - lastFrame) / 1000); lastFrame = t;
+  if (S.running && !document.hidden) update(t);
+  draw(t, dt);
+  requestAnimationFrame(frame);
+}
+
+/* ---------------- wiring ---------------- */
+window.addEventListener('devicemotion', e => { const s = readEvent(e); if (s) motionSample(s, performance.now()); });
+document.addEventListener('visibilitychange', () => {
+  const t = performance.now();
+  if (document.hidden) { S.hiddenAt = t; return; }
+  const gap = t - (S.hiddenAt || t);
+  if (S.enemy) { S.enemy.nextAttack += gap; S.enemy.windStart += gap; }
+  S.nextEnemyAt += gap; S.wardUntil += gap;
+});
+async function start(){
+  audioInit();
+  let note = '';
+  if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+    try { if (await DeviceMotionEvent.requestPermission() !== 'granted') note = 'Motion access was refused. Tap the spell cards to play.'; }
+    catch (e) { note = 'Motion access could not be asked for. Tap the spell cards to play.'; }
+  }
+  try { if (navigator.wakeLock) await navigator.wakeLock.request('screen'); } catch (e) {}
+  $('intro').hidden = true;
+  newGame();
+  if (note) setStatus(note);
+  setTimeout(() => { if (!sensorSeen && S.running) setStatus('No motion sensor found. Tap the spell cards (or keys 1–4) to play.'); }, 2500);
+}
+$('start').addEventListener('click', start);
+$('again').addEventListener('click', () => { $('over').hidden = true; audioInit(); newGame(); });
+for (const c of document.querySelectorAll('.card')) c.addEventListener('click', () => { audioInit(); cast(c.dataset.s, performance.now()); });
+window.addEventListener('keydown', e => { const s = { '1':'fire', '2':'bolt', '3':'frost', '4':'ward' }[e.key]; if (s) cast(s, performance.now()); });
+$('sens').addEventListener('input', e => { ENG.sens = +e.target.value; $('sensv').textContent = ENG.sens.toFixed(1); });
+$('dbg').addEventListener('change', e => { $('readout').hidden = !e.target.checked; });
+resize(); hud(); requestAnimationFrame(frame);
+window.__wand = { motionSample, ENG, S, cast };   // for testing
+</script>
+</body>
+</html>
